@@ -1,5 +1,5 @@
 'use client';
-Happi
+
 import { motion } from 'framer-motion';
 
 export default function Home() {
@@ -11,10 +11,13 @@ export default function Home() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        Welcome to Haven Calmi Clone
+        Welcome to Happi
       </motion.h1>
       <p className="text-center max-w-md text-gray-700">
-        A clean, minimal Next.js + Tailwind + Framer Motion starter to replace calmi.so easily with your flow and animations.
+       Hey, you good?
+If not, that’s okay. We’re here for the messy, the anxious, the overthinkers, the “I don’t even know what’s wrong” days. Meet your AI therapist: real talk, zero judgment, always on. Chat anytime. Vent, reflect, breathe — whatever you need, we got you.
+
+
       </p>
     </main>
   );
