@@ -1,89 +1,124 @@
-'use client';
-import { useState } from "react";
+"use client";
 
-const moods = ["😊 Happy", "😔 Sad", "😡 Angry", "😌 Calm", "😟 Anxious"];
-const prompts = [
-  "What's on your mind today?",
-  "How would you like to feel by the end of this chat?",
-  "Is there something specific you want to unpack?"
-];
+import { useState, useEffect } from "react";
 
-export default function HappiChat() {
-  const [step, setStep] = useState(0);
-  const [selectedMood, setSelectedMood] = useState("");
+export default function Home() {
+  const [textInput, setTextInput] = useState("");
   const [messages, setMessages] = useState<string[]>([]);
-  const [input, setInput] = useState("");
+  const [listening, setListening] = useState(false);
+  let recognition: SpeechRecognition | null = null;
 
-  const handleMoodSelect = (mood: string) => {
-    setSelectedMood(mood);
-    setStep(1);
+  useEffect(() => {
+    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
+      const SpeechRecognition = (window as any).webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0])
+          .map(result => result.transcript)
+          .join("");
+        setTextInput(transcript);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error", event);
+      };
+
+      recognition.onend = () => {
+        setListening(false);
+      };
+    }
+  }, []);
+
+  const startListening = () => {
+    if (recognition) {
+      recognition.start();
+      setListening(true);
+    }
   };
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    setMessages([...messages, `You: ${input}`]);
-    // simple reflection for now, later replace with OpenAI or your backend
-    setMessages((prev) => [...prev, `Happi: I hear you, let's unpack that together.`]);
-    setInput("");
+  const stopListening = () => {
+    if (recognition) {
+      recognition.stop();
+      setListening(false);
+    }
+  };
+
+  const sendMessage = () => {
+    if (textInput.trim() === "") return;
+    setMessages(prev => [...prev, textInput]);
+    setTextInput("");
+  };
+
+  const resetMessages = () => {
+    setMessages([]);
+    setTextInput("");
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6">
-        {step === 0 && (
-          <>
-            <h1 className="text-2xl font-bold mb-4 text-center">Hi friend 🌱</h1>
-            <p className="text-center mb-4">How are you feeling right now?</p>
-            <div className="grid grid-cols-2 gap-2">
-              {moods.map((mood) => (
-                <button
-                  key={mood}
-                  onClick={() => handleMoodSelect(mood)}
-                  className="bg-blue-100 hover:bg-blue-200 rounded-xl p-3 text-center"
-                >
-                  {mood}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
-        {step === 1 && (
-          <>
-            <h2 className="text-xl font-semibold mb-2">Great, you selected: {selectedMood}</h2>
-            <p className="mb-4">{prompts[Math.floor(Math.random() * prompts.length)]}</p>
-            <div className="border rounded-lg p-3 h-64 overflow-y-auto flex flex-col gap-2 mb-4 bg-gray-50">
-              {messages.length === 0 && (
-                <p className="text-gray-400 text-center">Your conversation will appear here.</p>
-              )}
-              {messages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`p-2 rounded-lg ${msg.startsWith("You") ? "bg-blue-100 self-end" : "bg-green-100 self-start"}`}
-                >
-                  {msg}
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Type your thoughts..."
-                className="flex-1 border rounded-lg p-2"
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              />
-              <button
-                onClick={handleSend}
-                className="bg-blue-500 text-white rounded-lg px-4 py-2 hover:bg-blue-600"
-              >
-                Send
-              </button>
-            </div>
-          </>
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-gradient-to-b from-blue-100 to-white">
+      <h1 className="text-3xl font-bold mb-2">👋 Welcome to Happi</h1>
+      <p className="text-center max-w-lg mb-4">
+        hi friend 🌱<br />
+        we made happi because life can be... a lot. some days you’re thriving. other days? not so much.
+        whether you're spiraling, healing, or just need to get something off your chest —
+        we’re here. no pressure. no judgment. just a space to breathe, reflect, and feel a little more okay.
+        <br />
+        with love, Meet
+      </p>
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={startListening}
+          disabled={listening}
+          className="bg-green-500 text-white px-4 py-2 rounded disabled:bg-green-300"
+        >
+          Start Voice
+        </button>
+        <button
+          onClick={stopListening}
+          disabled={!listening}
+          className="bg-red-500 text-white px-4 py-2 rounded disabled:bg-red-300"
+        >
+          Stop Voice
+        </button>
+        <button
+          onClick={resetMessages}
+          className="bg-gray-500 text-white px-4 py-2 rounded"
+        >
+          Reset
+        </button>
+      </div>
+      <div className="flex gap-2 mb-4">
+        <input
+          type="text"
+          value={textInput}
+          onChange={e => setTextInput(e.target.value)}
+          placeholder="Type or use voice..."
+          className="border px-4 py-2 rounded w-64"
+        />
+        <button
+          onClick={sendMessage}
+          className="bg-blue-500 text-white px-4 py-2 rounded"
+        >
+          Send
+        </button>
+      </div>
+      <div className="w-full max-w-md">
+        <h2 className="text-xl font-semibold mb-2">Messages:</h2>
+        {messages.length === 0 ? (
+          <p className="text-gray-500">No messages yet.</p>
+        ) : (
+          <ul className="list-disc list-inside">
+            {messages.map((msg, idx) => (
+              <li key={idx} className="text-gray-700">{msg}</li>
+            ))}
+          </ul>
         )}
       </div>
-    </div>
+    </main>
   );
 }
