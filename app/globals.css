@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Optional custom styles */
+html,
+body {
+  @apply bg-white text-black;
+}
+
+a {
+  @apply text-[#40b2f5] underline;
+}
