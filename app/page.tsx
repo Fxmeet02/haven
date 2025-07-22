@@ -1,37 +1,62 @@
+// app/page.tsx
 "use client";
-import { useState, useRef, useEffect } from "react";
+
+import { useEffect, useRef, useState } from "react";
+import OpenAI from "openai";
+
+const openai = new OpenAI();
 
 export default function Home() {
-  const [textInput, setTextInput] = useState("");
+  const [messages, setMessages] = useState([{ role: "assistant", content: "hey there! what's on your mind today?" }]);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
-  const synthRef = useRef<any>(null);
+  const synthRef = useRef<SpeechSynthesis | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       synthRef.current = window.speechSynthesis;
+      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+      if (SpeechRecognition) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = false;
+        recognitionRef.current.lang = "en-US";
 
-      if ("webkitSpeechRecognition" in window) {
-        const SpeechRecognition = (window as any).webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = false;
-        recognition.lang = "en-US";
-
-        recognition.onresult = (event: any) => {
-          const transcript = event.results[event.results.length - 1][0].transcript.trim();
-          setTextInput((prev) => prev + " " + transcript);
+        recognitionRef.current.onresult = async (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setMessages(prev => [...prev, { role: "user", content: transcript }]);
+          handleSend(transcript);
         };
 
-        recognitionRef.current = recognition;
+        recognitionRef.current.onend = () => setIsListening(false);
       }
     }
   }, []);
 
+  const handleSend = async (text: string) => {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-preview",
+      messages: [
+        { role: "system", content: "You are a friendly, warm AI therapist named Happi. Keep responses short and comforting." },
+        ...messages,
+        { role: "user", content: text }
+      ],
+    });
+
+    const reply = completion.choices[0].message.content;
+    setMessages(prev => [...prev, { role: "assistant", content: reply ?? "" }]);
+
+    if (synthRef.current) {
+      const utterance = new SpeechSynthesisUtterance(reply ?? "");
+      utterance.lang = "en-US";
+      synthRef.current.speak(utterance);
+    }
+  };
+
   const startListening = () => {
     if (recognitionRef.current && !isListening) {
-      recognitionRef.current.start();
       setIsListening(true);
+      recognitionRef.current.start();
     }
   };
 
@@ -42,48 +67,26 @@ export default function Home() {
     }
   };
 
-  const handleSpeak = () => {
-    if (synthRef.current && textInput) {
-      const utterance = new SpeechSynthesisUtterance(textInput);
-      synthRef.current.speak(utterance);
-    }
-  };
-
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen p-8 bg-white text-black">
-      <h1 className="text-4xl font-bold mb-4">Happi 🌱</h1>
-      <p className="mb-6 text-center max-w-md">
-        We made Happi because life can be... a lot.
-        <br /> Some days you’re thriving. Other days? Not so much.
-        <br /> Whether you're spiraling, healing, or just need to get something off your chest — we’re here.
-      </p>
+    <main className="flex flex-col items-center justify-center min-h-screen bg-white text-center p-4">
+      <h1 className="text-3xl font-bold mb-4">Happi</h1>
+      <p className="mb-4">{messages[messages.length - 1].content}</p>
 
-      <textarea
-        className="border rounded p-4 w-full max-w-md h-40"
-        value={textInput}
-        onChange={(e) => setTextInput(e.target.value)}
-        placeholder="Speak or type here..."
-      />
+      <div className="flex gap-4 mb-4">
+        <button onClick={startListening} className="bg-yellow-400 p-6 rounded-full shadow-lg hover:bg-yellow-500 transition">
+          🎤
+        </button>
+        <button onClick={stopListening} className="bg-gray-300 p-6 rounded-full shadow-lg hover:bg-gray-400 transition">
+          ❌
+        </button>
+      </div>
 
-      <div className="flex space-x-4 mt-4">
-        <button
-          onClick={startListening}
-          className="bg-green-500 text-white px-4 py-2 rounded"
-        >
-          Start Listening
-        </button>
-        <button
-          onClick={stopListening}
-          className="bg-yellow-500 text-white px-4 py-2 rounded"
-        >
-          Stop Listening
-        </button>
-        <button
-          onClick={handleSpeak}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          Speak
-        </button>
+      <div className="max-w-md text-left">
+        {messages.slice(1).map((msg, idx) => (
+          <div key={idx} className={`mb-2 p-2 rounded ${msg.role === "assistant" ? "bg-yellow-100" : "bg-gray-100"}`}>
+            <strong>{msg.role === "assistant" ? "Happi:" : "You:"}</strong> {msg.content}
+          </div>
+        ))}
       </div>
     </main>
   );
