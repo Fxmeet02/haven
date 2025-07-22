@@ -1,92 +1,97 @@
-// app/page.tsx
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import OpenAI from "openai";
-
-const openai = new OpenAI();
+import React, { useState, useRef } from "react";
 
 export default function Home() {
-  const [messages, setMessages] = useState([{ role: "assistant", content: "hey there! what's on your mind today?" }]);
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
-  const synthRef = useRef<SpeechSynthesis | null>(null);
+  const [messages, setMessages] = useState([
+    { role: "assistant", content: "hey there 🌱 what's on your mind today?" },
+  ]);
+  const [input, setInput] = useState("");
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const [listening, setListening] = useState(false);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      synthRef.current = window.speechSynthesis;
-      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-      if (SpeechRecognition) {
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = false;
-        recognitionRef.current.interimResults = false;
-        recognitionRef.current.lang = "en-US";
+  const handleSend = async (messageContent: string) => {
+    const newMessages = [...messages, { role: "user", content: messageContent }];
+    setMessages(newMessages);
+    setInput("");
 
-        recognitionRef.current.onresult = async (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          setMessages(prev => [...prev, { role: "user", content: transcript }]);
-          handleSend(transcript);
-        };
-
-        recognitionRef.current.onend = () => setIsListening(false);
-      }
-    }
-  }, []);
-
-  const handleSend = async (text: string) => {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-preview",
-      messages: [
-        { role: "system", content: "You are a friendly, warm AI therapist named Happi. Keep responses short and comforting." },
-        ...messages,
-        { role: "user", content: text }
-      ],
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: newMessages }),
     });
 
-    const reply = completion.choices[0].message.content;
-    setMessages(prev => [...prev, { role: "assistant", content: reply ?? "" }]);
+    const data = await res.json();
+    if (data.message) {
+      setMessages((prev) => [...prev, { role: "assistant", content: data.message.content }]);
 
-    if (synthRef.current) {
-      const utterance = new SpeechSynthesisUtterance(reply ?? "");
-      utterance.lang = "en-US";
-      synthRef.current.speak(utterance);
+      const utterance = new SpeechSynthesisUtterance(data.message.content);
+      window.speechSynthesis.speak(utterance);
     }
   };
 
   const startListening = () => {
-    if (recognitionRef.current && !isListening) {
-      setIsListening(true);
-      recognitionRef.current.start();
+    if (!("webkitSpeechRecognition" in window)) {
+      alert("Speech recognition not supported.");
+      return;
     }
+
+    const recognition = new webkitSpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      handleSend(transcript);
+      setListening(false);
+    };
+
+    recognition.onerror = () => {
+      setListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
   };
 
   const stopListening = () => {
-    if (recognitionRef.current && isListening) {
+    if (recognitionRef.current) {
       recognitionRef.current.stop();
-      setIsListening(false);
+      setListening(false);
     }
   };
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen bg-white text-center p-4">
-      <h1 className="text-3xl font-bold mb-4">Happi</h1>
-      <p className="mb-4">{messages[messages.length - 1].content}</p>
-
-      <div className="flex gap-4 mb-4">
-        <button onClick={startListening} className="bg-yellow-400 p-6 rounded-full shadow-lg hover:bg-yellow-500 transition">
-          🎤
-        </button>
-        <button onClick={stopListening} className="bg-gray-300 p-6 rounded-full shadow-lg hover:bg-gray-400 transition">
-          ❌
-        </button>
-      </div>
-
-      <div className="max-w-md text-left">
-        {messages.slice(1).map((msg, idx) => (
-          <div key={idx} className={`mb-2 p-2 rounded ${msg.role === "assistant" ? "bg-yellow-100" : "bg-gray-100"}`}>
-            <strong>{msg.role === "assistant" ? "Happi:" : "You:"}</strong> {msg.content}
+    <main className="flex flex-col items-center justify-center min-h-screen p-6 bg-gradient-to-b from-blue-50 to-white text-center">
+      <div className="text-xl font-medium mb-4">🧘‍♀️ Happi</div>
+      <div className="w-full max-w-md space-y-4">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={msg.role === "user" ? "text-right" : "text-left"}>
+            <div className={`inline-block px-4 py-2 rounded-lg ${msg.role === "user" ? "bg-blue-100" : "bg-gray-100"}`}>
+              {msg.content}
+            </div>
           </div>
         ))}
+      </div>
+
+      <div className="flex items-center mt-6 space-x-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSend(input)}
+          placeholder="Type your thoughts..."
+          className="border rounded px-4 py-2 w-64"
+        />
+        <button onClick={() => handleSend(input)} className="bg-blue-500 text-white px-4 py-2 rounded">Send</button>
+        <button
+          onClick={listening ? stopListening : startListening}
+          className={`px-4 py-2 rounded ${listening ? "bg-red-500 text-white" : "bg-green-500 text-white"}`}
+        >
+          {listening ? "Stop" : "🎤"}
+        </button>
       </div>
     </main>
   );
